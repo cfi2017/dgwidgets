@@ -15,8 +15,7 @@ var (
 	ErrNilMessage       = errors.New("err: Message is nil")
 	ErrNilEmbed         = errors.New("err: embed is nil")
 	ErrNotRunning       = errors.New("err: embed is not running")
-	ctx, cancel         = context.WithCancel(context.Background())
-	shutdown            = false
+	ctx                 = context.Background()
 )
 
 // WidgetHandler ...
