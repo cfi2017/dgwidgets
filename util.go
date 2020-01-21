@@ -22,6 +22,17 @@ func nextMessageReactionAddC(s *discordgo.Session) chan *discordgo.MessageReacti
 	return out
 }
 
+// Creates a new channel that triggers for each reaction on the message that wasn't added by the bot (message author)
+func reactionAddForMessage(s *discordgo.Session, message *discordgo.Message) (out chan *discordgo.MessageReactionAdd, cancel func()) {
+	out = make(chan *discordgo.MessageReactionAdd)
+	cancel = s.AddHandler(func(_ *discordgo.Session, e *discordgo.MessageReactionAdd) {
+		if e.MessageID == message.ID && e.UserID != message.Author.ID {
+			out <- e
+		}
+	})
+	return
+}
+
 // EmbedsFromString splits a string into a slice of MessageEmbeds.
 //     txt     : text to split
 //     chunklen: How long the text in each embed should be
