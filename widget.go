@@ -38,8 +38,6 @@ type Widget struct {
 
 	// Delete reactions after they are added
 	DeleteReactions bool
-	// Delete Embed on timeout or close
-	DeleteEmbed bool
 	// Only allow listed users to use reactions.
 	UserWhitelist []string
 
