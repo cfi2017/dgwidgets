@@ -1,6 +1,7 @@
 package dgwidgets
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -13,6 +14,9 @@ var (
 	ErrIndexOutOfBounds = errors.New("err: Index is out of bounds")
 	ErrNilMessage       = errors.New("err: Message is nil")
 	ErrNilEmbed         = errors.New("err: embed is nil")
+	ErrNotRunning       = errors.New("err: embed is not running")
+	ctx, cancel         = context.WithCancel(context.Background())
+	shutdown            = false
 )
 
 // WidgetHandler ...
@@ -21,13 +25,12 @@ type WidgetHandler func(*Widget, *discordgo.MessageReaction)
 // Widget is a message embed with reactions for buttons.
 // Accepts custom handlers for reactions.
 type Widget struct {
-	sync.Mutex
+	sync.RWMutex
 	Embed     *discordgo.MessageEmbed
 	Message   *discordgo.Message
 	Ses       *discordgo.Session
 	ChannelID string
 	Timeout   time.Duration
-	Close     chan bool
 
 	// Handlers binds emoji names to functions
 	Handlers map[string]WidgetHandler
@@ -36,10 +39,13 @@ type Widget struct {
 
 	// Delete reactions after they are added
 	DeleteReactions bool
+	// Delete message when closed or timed out
+	DeleteOnTimeout bool
 	// Only allow listed users to use reactions.
 	UserWhitelist []string
 
 	running bool
+	cancel  func()
 }
 
 // NewWidget returns a pointer to a Widget object
@@ -51,7 +57,6 @@ func NewWidget(ses *discordgo.Session, channelID string, embed *discordgo.Messag
 		Ses:             ses,
 		Keys:            []string{},
 		Handlers:        map[string]WidgetHandler{},
-		Close:           make(chan bool),
 		DeleteReactions: true,
 		Embed:           embed,
 	}
@@ -71,22 +76,23 @@ func (w *Widget) isUserAllowed(userID string) bool {
 	return false
 }
 
+func (w *Widget) Close() error {
+	if !w.Running() {
+		return ErrNotRunning
+	}
+	w.cancel()
+	w.setRunning(false)
+}
+
 // Spawn spawns the widget in channel w.ChannelID
 func (w *Widget) Spawn() error {
 	if w.Running() {
 		return ErrAlreadyRunning
 	}
-	w.running = true
-	defer func() {
-		w.running = false
-	}()
-
+	w.setRunning(true)
 	if w.Embed == nil {
 		return ErrNilEmbed
 	}
-
-	startTime := time.Now()
-
 	// Create initial message.
 	msg, err := w.Ses.ChannelMessageSendEmbed(w.ChannelID, w.Embed)
 	if err != nil {
@@ -99,45 +105,44 @@ func (w *Widget) Spawn() error {
 		_ = w.Ses.MessageReactionAdd(w.Message.ChannelID, w.Message.ID, v)
 	}
 
-	var reaction *discordgo.MessageReaction
+	// run
+	wCtx, cancelW := context.WithTimeout(ctx, w.Timeout)
+	w.cancel = cancelW
+	reactions, cancelH := reactionAddForMessage(w.Ses, msg)
+
 	for {
-		// Navigation timeout enabled
-		if w.Timeout != 0 {
-			select {
-			case k := <-nextMessageReactionAddC(w.Ses):
-				reaction = k.MessageReaction
-			case <-time.After(startTime.Add(w.Timeout).Sub(time.Now())):
-				return nil
-			case <-w.Close:
-				return nil
+		select {
+		case re := <-reactions:
+			// Ignore reactions sent by bot
+			reaction := re.MessageReaction
+			if reaction.MessageID != w.Message.ID || w.Ses.State.User.ID == reaction.UserID {
+				continue
 			}
-		} else /*Navigation timeout not enabled*/ {
-			select {
-			case k := <-nextMessageReactionAddC(w.Ses):
-				reaction = k.MessageReaction
-			case <-w.Close:
-				return nil
+
+			if v, ok := w.Handlers[reaction.Emoji.Name]; ok {
+				if w.isUserAllowed(reaction.UserID) {
+					go v(w, reaction)
+				}
 			}
-		}
 
-		// Ignore reactions sent by bot
-		if reaction.MessageID != w.Message.ID || w.Ses.State.User.ID == reaction.UserID {
-			continue
-		}
-
-		if v, ok := w.Handlers[reaction.Emoji.Name]; ok {
-			if w.isUserAllowed(reaction.UserID) {
-				go v(w, reaction)
+			if w.DeleteReactions {
+				go func() {
+					time.Sleep(time.Millisecond * 250)
+					_ = w.Ses.MessageReactionRemove(reaction.ChannelID, reaction.MessageID, reaction.Emoji.Name, reaction.UserID)
+				}()
 			}
-		}
-
-		if w.DeleteReactions {
-			go func() {
-				time.Sleep(time.Millisecond * 250)
-				_ = w.Ses.MessageReactionRemove(reaction.ChannelID, reaction.MessageID, reaction.Emoji.Name, reaction.UserID)
-			}()
+			break
+		case <-wCtx.Done():
+			// remove the event listener
+			cancelH()
+			if err := wCtx.Err(); err != nil {
+				if w.DeleteOnTimeout && wCtx.Err() == context.DeadlineExceeded {
+					_ = w.Ses.ChannelMessageDelete(w.ChannelID, w.Message.ID)
+				}
+			}
 		}
 	}
+
 }
 
 // Handle adds a handler for the given emoji name
@@ -191,9 +196,9 @@ func (w *Widget) QueryInput(prompt string, userID string, timeout time.Duration)
 
 // Running returns w.running
 func (w *Widget) Running() bool {
-	w.Lock()
+	w.RLock()
 	running := w.running
-	w.Unlock()
+	w.RUnlock()
 	return running
 }
 
@@ -204,4 +209,10 @@ func (w *Widget) UpdateEmbed(embed *discordgo.MessageEmbed) (*discordgo.Message,
 		return nil, ErrNilMessage
 	}
 	return w.Ses.ChannelMessageEditEmbed(w.ChannelID, w.Message.ID, embed)
+}
+
+func (w *Widget) setRunning(b bool) {
+	w.Lock()
+	w.running = b
+	w.Unlock()
 }

@@ -13,15 +13,6 @@ func nextMessageCreateC(s *discordgo.Session) chan *discordgo.MessageCreate {
 	return out
 }
 
-// NextMessageReactionAddC returns a channel for the next MessageReactionAdd event
-func nextMessageReactionAddC(s *discordgo.Session) chan *discordgo.MessageReactionAdd {
-	out := make(chan *discordgo.MessageReactionAdd)
-	s.AddHandlerOnce(func(_ *discordgo.Session, e *discordgo.MessageReactionAdd) {
-		out <- e
-	})
-	return out
-}
-
 // Creates a new channel that triggers for each reaction on the message that wasn't added by the bot (message author)
 func reactionAddForMessage(s *discordgo.Session, message *discordgo.Message) (out chan *discordgo.MessageReactionAdd, cancel func()) {
 	out = make(chan *discordgo.MessageReactionAdd)
@@ -42,7 +33,7 @@ func EmbedsFromString(txt string, chunklen int) []*discordgo.MessageEmbed {
 		chunklen = 2048
 	}
 
-	embeds := []*discordgo.MessageEmbed{}
+	var embeds = make([]*discordgo.MessageEmbed, 0)
 	for i := 0; i < int((float64(len(txt))/float64(chunklen))+0.5); i++ {
 		start := i * chunklen
 		end := start + chunklen
