@@ -8,13 +8,11 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// error vars
 var (
 	ErrAlreadyRunning   = errors.New("err: Widget already running")
 	ErrIndexOutOfBounds = errors.New("err: Index is out of bounds")
 	ErrNilMessage       = errors.New("err: Message is nil")
 	ErrNilEmbed         = errors.New("err: embed is nil")
-	ErrNotRunning       = errors.New("err: not running")
 )
 
 // WidgetHandler ...
@@ -98,7 +96,7 @@ func (w *Widget) Spawn() error {
 
 	// Add reaction buttons
 	for _, v := range w.Keys {
-		w.Ses.MessageReactionAdd(w.Message.ChannelID, w.Message.ID, v)
+		_ = w.Ses.MessageReactionAdd(w.Message.ChannelID, w.Message.ID, v)
 	}
 
 	var reaction *discordgo.MessageReaction
@@ -136,7 +134,7 @@ func (w *Widget) Spawn() error {
 		if w.DeleteReactions {
 			go func() {
 				time.Sleep(time.Millisecond * 250)
-				w.Ses.MessageReactionRemove(reaction.ChannelID, reaction.MessageID, reaction.Emoji.Name, reaction.UserID)
+				_ = w.Ses.MessageReactionRemove(reaction.ChannelID, reaction.MessageID, reaction.Emoji.Name, reaction.UserID)
 			}()
 		}
 	}
@@ -168,7 +166,7 @@ func (w *Widget) QueryInput(prompt string, userID string, timeout time.Duration)
 		return nil, err
 	}
 	defer func() {
-		w.Ses.ChannelMessageDelete(msg.ChannelID, msg.ID)
+		_ = w.Ses.ChannelMessageDelete(msg.ChannelID, msg.ID)
 	}()
 
 	timeoutChan := make(chan int)
@@ -183,10 +181,10 @@ func (w *Widget) QueryInput(prompt string, userID string, timeout time.Duration)
 			if usermsg.Author.ID != userID {
 				continue
 			}
-			w.Ses.ChannelMessageDelete(usermsg.ChannelID, usermsg.ID)
+			_ = w.Ses.ChannelMessageDelete(usermsg.ChannelID, usermsg.ID)
 			return usermsg.Message, nil
 		case <-timeoutChan:
-			return nil, errors.New("Timed out")
+			return nil, errors.New("timed out")
 		}
 	}
 }
