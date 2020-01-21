@@ -137,10 +137,8 @@ func (w *Widget) Spawn() error {
 
 		if w.DeleteReactions {
 			go func() {
-				if w.isUserAllowed(reaction.UserID) {
-					time.Sleep(time.Millisecond * 250)
-					w.Ses.MessageReactionRemove(reaction.ChannelID, reaction.MessageID, reaction.Emoji.Name, reaction.UserID)
-				}
+				time.Sleep(time.Millisecond * 250)
+				w.Ses.MessageReactionRemove(reaction.ChannelID, reaction.MessageID, reaction.Emoji.Name, reaction.UserID)
 			}()
 		}
 	}
