@@ -82,6 +82,7 @@ func (w *Widget) Close() error {
 	}
 	w.cancel()
 	w.setRunning(false)
+	return nil
 }
 
 // Spawn spawns the widget in channel w.ChannelID
