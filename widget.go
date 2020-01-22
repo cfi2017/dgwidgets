@@ -135,7 +135,7 @@ func (w *Widget) listen() error {
 			if w.DeleteReactions {
 				go func() {
 					time.Sleep(time.Millisecond * 250)
-					_ = w.Ses.MessageReactionRemove(reaction.ChannelID, reaction.MessageID, reaction.Emoji.Name, reaction.UserID)
+					_ = w.Ses.MessageReactionRemove(reaction.ChannelID, reaction.MessageID, reaction.Emoji.ID, reaction.UserID)
 				}()
 			}
 			break
