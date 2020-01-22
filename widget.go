@@ -84,32 +84,32 @@ func (w *Widget) Close() error {
 	return nil
 }
 
-// Spawn spawns the widget in channel w.ChannelID
-func (w *Widget) Spawn() error {
+func (w *Widget) Hook(Session *discordgo.Session, ChannelID, MessageID string) error {
 	if w.Running() {
 		return ErrAlreadyRunning
 	}
 	w.setRunning(true)
-	if w.Embed == nil {
-		return ErrNilEmbed
-	}
-	// Create initial message.
-	msg, err := w.Ses.ChannelMessageSendEmbed(w.ChannelID, w.Embed)
+	w.Ses = Session
+	msg, err := Session.ChannelMessage(ChannelID, MessageID)
 	if err != nil {
 		return err
 	}
 	w.Message = msg
-
-	// Add reaction buttons
-	for _, v := range w.Keys {
-		_ = w.Ses.MessageReactionAdd(w.Message.ChannelID, w.Message.ID, v)
+	if len(msg.Embeds) == 0 {
+		return ErrNilEmbed
 	}
+	w.Embed = msg.Embeds[0]
 
 	// run
+	return w.listen()
+
+}
+
+func (w *Widget) listen() error {
+
 	wCtx, cancelW := context.WithTimeout(ctx, w.Timeout)
 	w.cancel = cancelW
-	reactions, cancelH := reactionAddForMessage(w.Ses, msg)
-
+	reactions, cancelH := reactionAddForMessage(w.Ses, w.Message)
 	for {
 		select {
 		case re := <-reactions:
@@ -135,13 +135,40 @@ func (w *Widget) Spawn() error {
 		case <-wCtx.Done():
 			// remove the event listener
 			cancelH()
-			if err := wCtx.Err(); err != nil {
+			err := wCtx.Err()
+			if err != nil {
 				if w.DeleteOnTimeout && wCtx.Err() == context.DeadlineExceeded {
 					_ = w.Ses.ChannelMessageDelete(w.ChannelID, w.Message.ID)
 				}
 			}
+			return err
 		}
 	}
+}
+
+// Spawn spawns the widget in channel w.ChannelID
+func (w *Widget) Spawn() error {
+	if w.Running() {
+		return ErrAlreadyRunning
+	}
+	w.setRunning(true)
+	if w.Embed == nil {
+		return ErrNilEmbed
+	}
+	// Create initial message.
+	msg, err := w.Ses.ChannelMessageSendEmbed(w.ChannelID, w.Embed)
+	if err != nil {
+		return err
+	}
+	w.Message = msg
+
+	// Add reaction buttons
+	for _, v := range w.Keys {
+		_ = w.Ses.MessageReactionAdd(w.Message.ChannelID, w.Message.ID, v)
+	}
+
+	// run
+	return w.listen()
 
 }
 
