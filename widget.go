@@ -107,7 +107,13 @@ func (w *Widget) Hook(Session *discordgo.Session, ChannelID, MessageID string) e
 
 func (w *Widget) listen() error {
 
-	wCtx, cancelW := context.WithTimeout(ctx, w.Timeout)
+	var wCtx context.Context
+	var cancelW context.CancelFunc
+	if w.Timeout != 0 {
+		wCtx, cancelW = context.WithTimeout(ctx, w.Timeout)
+	} else {
+		wCtx, cancelW = context.WithCancel(ctx)
+	}
 	w.cancel = cancelW
 	reactions, cancelH := reactionAddForMessage(w.Ses, w.Message)
 	del, cancelDel := messageRemove(w.Ses, w.Message)
