@@ -45,7 +45,7 @@ func messageRemove(s *discordgo.Session, message *discordgo.Message) (out chan b
 			cancel()
 		}
 	})
-	cancelChannelDelete = s.AddHandler(func(_ *discordgo.Session, e *discordgo.Channel) {
+	cancelChannelDelete = s.AddHandler(func(_ *discordgo.Session, e *discordgo.ChannelDelete) {
 		if e.ID == message.ChannelID {
 			close(out)
 			cancel()
