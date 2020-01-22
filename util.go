@@ -24,6 +24,42 @@ func reactionAddForMessage(s *discordgo.Session, message *discordgo.Message) (ou
 	return
 }
 
+func messageRemove(s *discordgo.Session, message *discordgo.Message) (out chan bool, cancel func()) {
+	var cancelMessageDelete, cancelMessageDeleteBulk, cancelChannelDelete, cancelGuildDelete func()
+	out = make(chan bool)
+	cancel = func() {
+		cancelMessageDelete()
+		cancelMessageDeleteBulk()
+		cancelChannelDelete()
+		cancelGuildDelete()
+	}
+	cancelMessageDelete = s.AddHandler(func(_ *discordgo.Session, e *discordgo.MessageDelete) {
+		if e.ID == message.ID {
+			close(out)
+			cancel()
+		}
+	})
+	cancelMessageDeleteBulk = s.AddHandler(func(_ *discordgo.Session, e *discordgo.MessageDelete) {
+		if e.ID == message.ID {
+			close(out)
+			cancel()
+		}
+	})
+	cancelChannelDelete = s.AddHandler(func(_ *discordgo.Session, e *discordgo.Channel) {
+		if e.ID == message.ChannelID {
+			close(out)
+			cancel()
+		}
+	})
+	cancelGuildDelete = s.AddHandler(func(_ *discordgo.Session, e *discordgo.GuildDelete) {
+		if e.ID == message.GuildID {
+			close(out)
+			cancel()
+		}
+	})
+	return
+}
+
 // EmbedsFromString splits a string into a slice of MessageEmbeds.
 //     txt     : text to split
 //     chunklen: How long the text in each embed should be
