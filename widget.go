@@ -115,8 +115,10 @@ func (w *Widget) listen() error {
 		wCtx, cancelW = context.WithCancel(ctx)
 	}
 	w.cancel = cancelW
-	reactions, cancelH := reactionAddForMessage(w.Ses, w.Message)
+	reactions, removeHandler := reactionAddForMessage(w.Ses, w.Message)
+	defer removeHandler()
 	del, cancelDel := messageRemove(w.Ses, w.Message)
+	defer cancelDel()
 	for {
 		select {
 		case re := <-reactions:
@@ -142,9 +144,6 @@ func (w *Widget) listen() error {
 		case <-del:
 			return nil
 		case <-wCtx.Done():
-			// remove the event listener
-			cancelH()
-			cancelDel()
 			err := wCtx.Err()
 			if err != nil {
 				if w.DeleteOnTimeout && wCtx.Err() == context.DeadlineExceeded {
