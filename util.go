@@ -39,10 +39,12 @@ func messageRemove(s *discordgo.Session, message *discordgo.Message) (out chan b
 			cancel()
 		}
 	})
-	cancelMessageDeleteBulk = s.AddHandler(func(_ *discordgo.Session, e *discordgo.MessageDelete) {
-		if e.ID == message.ID {
-			close(out)
-			cancel()
+	cancelMessageDeleteBulk = s.AddHandler(func(_ *discordgo.Session, e *discordgo.MessageDeleteBulk) {
+		for _, m := range e.Messages {
+			if m == message.ID {
+				close(out)
+				cancel()
+			}
 		}
 	})
 	cancelChannelDelete = s.AddHandler(func(_ *discordgo.Session, e *discordgo.ChannelDelete) {
